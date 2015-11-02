@@ -4,6 +4,7 @@
 #include "caffe/layer.hpp"
 #include "caffe/util/math_functions.hpp"
 #include "caffe/vision_layers.hpp"
+#include <iostream>
 
 namespace caffe {
 
@@ -12,8 +13,14 @@ void SoftmaxLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
   softmax_axis_ =
       bottom[0]->CanonicalAxisIndex(this->layer_param_.softmax_param().axis());
+
+  std::cout << "Softmax axis: " << softmax_axis_ << "\n";
+  std::cout << bottom[0]->shape(softmax_axis_) << "\n";
+
   top[0]->ReshapeLike(*bottom[0]);
   vector<int> mult_dims(1, bottom[0]->shape(softmax_axis_));
+
+
   sum_multiplier_.Reshape(mult_dims);
   Dtype* multiplier_data = sum_multiplier_.mutable_cpu_data();
   caffe_set(sum_multiplier_.count(), Dtype(1), multiplier_data);
@@ -82,7 +89,7 @@ void SoftmaxLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
     caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, channels, inner_num_, 1,
         -1., sum_multiplier_.cpu_data(), scale_data, 1., bottom_diff + i * dim);
   }
-  // elementwise multiplication
+  // element wise multiplication
   caffe_mul(top[0]->count(), bottom_diff, top_data, bottom_diff);
 }
 
