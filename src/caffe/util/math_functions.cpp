@@ -121,9 +121,21 @@ void caffe_cpu_axpby<float>(const int N, const float alpha, const float* X,
 }
 
 template <>
+void caffe_cpu_axpby_strided<float>(const int N, const float alpha, const float* X,
+                            const float beta, float* Y, const int incy) {
+  cblas_saxpby(N, alpha, X, 1, beta, Y, incy);
+}
+
+template <>
 void caffe_cpu_axpby<double>(const int N, const double alpha, const double* X,
                              const double beta, double* Y) {
   cblas_daxpby(N, alpha, X, 1, beta, Y, 1);
+}
+
+template <>
+void caffe_cpu_axpby_strided<double>(const int N, const double alpha, const double* X,
+                             const double beta, double* Y, const int incy) {
+  cblas_daxpby(N, alpha, X, 1, beta, Y, incy);
 }
 
 template <>

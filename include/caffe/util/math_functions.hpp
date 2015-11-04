@@ -34,6 +34,10 @@ void caffe_cpu_axpby(const int N, const Dtype alpha, const Dtype* X,
     const Dtype beta, Dtype* Y);
 
 template <typename Dtype>
+void caffe_cpu_axpby_strided(const int N, const Dtype alpha, const Dtype* X,
+    const Dtype beta, Dtype* Y, const int incy);
+
+template <typename Dtype>
 void caffe_copy(const int N, const Dtype *X, Dtype *Y);
 
 template <typename Dtype>

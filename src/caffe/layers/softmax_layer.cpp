@@ -14,9 +14,6 @@ void SoftmaxLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   softmax_axis_ =
       bottom[0]->CanonicalAxisIndex(this->layer_param_.softmax_param().axis());
 
-  std::cout << "Softmax axis: " << softmax_axis_ << "\n";
-  std::cout << bottom[0]->shape(softmax_axis_) << "\n";
-
   top[0]->ReshapeLike(*bottom[0]);
   vector<int> mult_dims(1, bottom[0]->shape(softmax_axis_));
 

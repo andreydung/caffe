@@ -45,13 +45,12 @@ void ContrastiveLossLayer<Dtype>::Forward_cpu(
       this->layer_param_.contrastive_loss_param().legacy_version();
   Dtype loss(0.0);
 
-  int countPixels = 0;
   for (int i = 0; i < bottom[0]->num(); ++i) {
 	  for(int j = 0; j < dim; j++) {
 		  const int label_value = static_cast<int>(bottom[2]->cpu_data()[i * dim + j]);
 
-		  dist_sq_.mutable_cpu_data()[i*dim + j] = caffe_cpu_dot(channels,
-			  diff_.cpu_data() + (i*channels*dim + j), diff_.cpu_data() + (i*channels*dim + j));
+		  dist_sq_.mutable_cpu_data()[i*dim + j] = caffe_cpu_strided_dot(channels,
+			  diff_.cpu_data() + (i*channels*dim + j), dim, diff_.cpu_data() + (i*channels*dim + j), dim);
 
 		  if (label_value) {  // similar pairs
 			  loss += dist_sq_.cpu_data()[i*dim + j];
@@ -63,10 +62,9 @@ void ContrastiveLossLayer<Dtype>::Forward_cpu(
 				  loss += dist*dist;
 			  }
 		  }
-		  countPixels++;
 	  }
   }
-  loss = loss / countPixels / Dtype(2);
+  loss = loss / bottom[0]->num()/dim / Dtype(2);
   top[0]->mutable_cpu_data()[0] = loss;
 }
 
@@ -74,52 +72,52 @@ template <typename Dtype>
 void ContrastiveLossLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
     const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
   Dtype margin = this->layer_param_.contrastive_loss_param().margin();
-  const int dim = bottom[0]->height() * bottom[0]->width();
 
   bool legacy_version =
       this->layer_param_.contrastive_loss_param().legacy_version();
 
   for (int i = 0; i < 2; ++i) {
     if (propagate_down[i]) {
+	  int num = bottom[i]->num();
+	  int channels = bottom[i]->channels();
+	  int dim = bottom[i]->width() * bottom[i]->height();
+
       const Dtype sign = (i == 0) ? 1 : -1;
       const Dtype alpha = sign * top[0]->cpu_diff()[0] /
-          static_cast<Dtype>(bottom[i]->num());
-      int num = bottom[i]->num();
-      int channels = bottom[i]->channels();
+    		  	  	  	  static_cast<Dtype>(bottom[i]->num() * dim);
+
 
       for (int j = 0; j < num; ++j) {
     	  for(int k = 0; k < dim; k++) {
 
 			Dtype* bout = bottom[i]->mutable_cpu_diff();
 			if (static_cast<int>(bottom[2]->cpu_data()[j * dim + k])) {  // similar pairs
-			  caffe_cpu_axpby(
-				  channels,
-				  alpha,
-				  diff_.cpu_data() + (j*channels*dim + k),
-				  Dtype(0.0),
-				  bout + (j*channels*dim + k));
-			} else {  // dissimilar pairs
+				for(int c = 0; c < channels; c++) {
+					bout[j*channels*dim + c*dim + k] = diff_.cpu_data()[j*channels*dim + c*dim +k] * alpha;
+				}
+			}
+			else {  // dissimilar pairs
 			  Dtype mdist(0.0);
 			  Dtype beta(0.0);
 			  if (legacy_version) {
 				mdist = margin - dist_sq_.cpu_data()[j*dim + k];
 				beta = -alpha;
-			  } else {
+			  }
+			  else {
 				Dtype dist = sqrt(dist_sq_.cpu_data()[j*dim + k]);
 				mdist = margin - dist;
 				beta = -alpha * mdist / (dist + Dtype(1e-4));
 			  }
-			  if (mdist > Dtype(0.0)) {
-				caffe_cpu_axpby(
-					channels,
-					beta,
-					diff_.cpu_data() + (j*channels*dim + k),
-					Dtype(0.0),
-					bout + (j*channels*dim + k));
-			  } else {
-				caffe_set(channels, Dtype(0), bout + (j*channels*dim + k));
-			  }
 
+			  if (mdist > Dtype(0.0)) {
+				for(int c = 0; c < channels; c++) {
+					bout[j*channels*dim + c*dim + k] = diff_.cpu_data()[j*channels*dim + c*dim + k] * beta;
+				}
+			  } else {
+				for(int c = 0; c < channels; c++) {
+					bout[j*channels*dim + c*dim + k] = 0;
+				}
+			  }
 			}
         }
       }
