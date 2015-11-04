@@ -92,9 +92,17 @@ void ContrastiveLossLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
 
 			Dtype* bout = bottom[i]->mutable_cpu_diff();
 			if (static_cast<int>(bottom[2]->cpu_data()[j * dim + k])) {  // similar pairs
-				for(int c = 0; c < channels; c++) {
-					bout[j*channels*dim + c*dim + k] = diff_.cpu_data()[j*channels*dim + c*dim +k] * alpha;
-				}
+				  caffe_cpu_axpby_strided(
+					  channels,
+					  alpha,
+					  diff_.cpu_data() + (j*channels*dim + k),
+					  Dtype(0.0),
+					  bout + (j*channels*dim + k),
+					  dim);
+
+//				for(int c = 0; c < channels; c++) {
+//					bout[j*channels*dim + c*dim + k] = diff_.cpu_data()[j*channels*dim + c*dim +k] * alpha;
+//				}
 			}
 			else {  // dissimilar pairs
 			  Dtype mdist(0.0);
@@ -110,9 +118,17 @@ void ContrastiveLossLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
 			  }
 
 			  if (mdist > Dtype(0.0)) {
-				for(int c = 0; c < channels; c++) {
-					bout[j*channels*dim + c*dim + k] = diff_.cpu_data()[j*channels*dim + c*dim + k] * beta;
-				}
+				caffe_cpu_axpby_strided(
+						channels,
+						beta,
+						diff_.cpu_data() + (j*channels*dim + k),
+						Dtype(0.0),
+						bout + (j*channels*dim + k),
+						dim);
+
+//				for(int c = 0; c < channels; c++) {
+//					bout[j*channels*dim + c*dim + k] = diff_.cpu_data()[j*channels*dim + c*dim + k] * beta;
+//				}
 			  } else {
 				for(int c = 0; c < channels; c++) {
 					bout[j*channels*dim + c*dim + k] = 0;
