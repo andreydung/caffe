@@ -22,9 +22,9 @@ class ContrastiveLossLayerTest : public MultiDeviceTest<TypeParam> {
 
  protected:
   ContrastiveLossLayerTest()
-      : blob_bottom_data_i_(new Blob<Dtype>(120, 9, 3, 5)),
-        blob_bottom_data_j_(new Blob<Dtype>(120, 9, 3, 5)),
-        blob_bottom_y_(new Blob<Dtype>(120, 1, 3, 5)),
+      : blob_bottom_data_i_(new Blob<Dtype>(2, 3, 4, 5)),
+        blob_bottom_data_j_(new Blob<Dtype>(2, 3, 4, 5)),
+        blob_bottom_y_(new Blob<Dtype>(2, 1, 4, 5)),
         blob_top_loss_(new Blob<Dtype>()) {
     // fill the values
     FillerParameter filler_param;
@@ -36,7 +36,8 @@ class ContrastiveLossLayerTest : public MultiDeviceTest<TypeParam> {
     filler.Fill(this->blob_bottom_data_j_);
     blob_bottom_vec_.push_back(blob_bottom_data_j_);
     for (int i = 0; i < blob_bottom_y_->count(); ++i) {
-      blob_bottom_y_->mutable_cpu_data()[i] = caffe_rng_rand() % 2;  // 0 or 1
+//      blob_bottom_y_->mutable_cpu_data()[i] = caffe_rng_rand() % 2;  // 0 or 1
+    	blob_bottom_y_->mutable_cpu_data()[i] = 1;
     }
     blob_bottom_vec_.push_back(blob_bottom_y_);
     blob_top_vec_.push_back(blob_top_loss_);
@@ -72,25 +73,30 @@ TYPED_TEST(ContrastiveLossLayerTest, TestForward) {
   std::cout << "dim in testing: " << dim << "\n";
   std::cout << "channels: " << channels << "\n";
   std::cout << "num: " << num << "\n";
+  std::cout << "margin: " << margin << "\n";
+
   Dtype loss(0);
   for (int i = 0; i < num; ++i) {
 	  // for each pixel
 	  for (int j = 0; j < dim; j++) {
 		Dtype dist_sq(0);
+
 		for (int k = 0; k < channels; ++k) {
-		  Dtype diff = this->blob_bottom_data_i_->cpu_data()[i*channels*dim + k*dim + j] -
-			  this->blob_bottom_data_j_->cpu_data()[i*channels*dim + k*dim + j];
+		  Dtype diff = 	this->blob_bottom_data_i_->cpu_data()[i*channels*dim + k*dim + j] -
+				  	  	this->blob_bottom_data_j_->cpu_data()[i*channels*dim + k*dim + j];
+
 		  dist_sq += diff*diff;
 		}
+
 		if (this->blob_bottom_y_->cpu_data()[i * dim + j]) {  // similar pairs
 		  loss += dist_sq;
 		} else {
-		  Dtype dist = std::max(margin - sqrt(dist_sq), 0.0);
+		  Dtype dist = std::max(margin - dist_sq, Dtype(0.0));
 		  loss += dist*dist;
 		}
 	  }
   }
-  loss /= static_cast<Dtype>(num * dim) * Dtype(2);
+  loss /= static_cast<Dtype>(dim) * Dtype(2);
   EXPECT_NEAR(this->blob_top_loss_->cpu_data()[0], loss, 1e-6);
 }
 
