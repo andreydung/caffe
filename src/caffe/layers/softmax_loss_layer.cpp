@@ -55,12 +55,12 @@ void SoftmaxWithLossLayer<Dtype>::Forward_cpu(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
   // The forward pass computes the softmax prob values.
   softmax_layer_->Forward(softmax_bottom_vec_, softmax_top_vec_);
+
   const Dtype* prob_data = prob_.cpu_data();
   const Dtype* label = bottom[1]->cpu_data();
   int dim = prob_.count() / outer_num_;
   int count = 0;
   Dtype loss = 0;
-  std::cout << "Softmax with loss\n";
   for (int i = 0; i < outer_num_; ++i) {
     for (int j = 0; j < inner_num_; j++) {
       const int label_value = static_cast<int>(label[i * inner_num_ + j]);

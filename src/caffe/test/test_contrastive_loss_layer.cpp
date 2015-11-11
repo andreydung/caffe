@@ -36,8 +36,8 @@ class ContrastiveLossLayerTest : public MultiDeviceTest<TypeParam> {
     filler.Fill(this->blob_bottom_data_j_);
     blob_bottom_vec_.push_back(blob_bottom_data_j_);
     for (int i = 0; i < blob_bottom_y_->count(); ++i) {
-//      blob_bottom_y_->mutable_cpu_data()[i] = caffe_rng_rand() % 2;  // 0 or 1
-    	blob_bottom_y_->mutable_cpu_data()[i] = 1;
+      blob_bottom_y_->mutable_cpu_data()[i] = caffe_rng_rand() % 2;  // 0 or 1
+//    	blob_bottom_y_->mutable_cpu_data()[i] = 0;  // 0 or 1
     }
     blob_bottom_vec_.push_back(blob_bottom_y_);
     blob_top_vec_.push_back(blob_top_loss_);
@@ -87,12 +87,12 @@ TYPED_TEST(ContrastiveLossLayerTest, TestForward) {
 		if (this->blob_bottom_y_->cpu_data()[i * dim + j]) {  // similar pairs
 		  loss += dist_sq;
 		} else {
-		  Dtype dist = std::max(margin - dist_sq, Dtype(0.0));
+		  Dtype dist = std::max(margin - sqrt(dist_sq), 0.0);
 		  loss += dist*dist;
 		}
 	  }
   }
-  loss /= static_cast<Dtype>(dim) * Dtype(2);
+  loss /= static_cast<Dtype>(dim * num * 2);
   EXPECT_NEAR(this->blob_top_loss_->cpu_data()[0], loss, 1e-6);
 }
 
@@ -139,7 +139,7 @@ TYPED_TEST(ContrastiveLossLayerTest, TestForwardLegacy) {
 		}
   	  }
   }
-  loss /= static_cast<Dtype>(dim) * Dtype(2);
+  loss /= static_cast<Dtype>(dim * num * 2);
   EXPECT_NEAR(this->blob_top_loss_->cpu_data()[0], loss, 1e-6);
 }
 

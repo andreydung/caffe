@@ -37,6 +37,7 @@ void SoftmaxLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   int channels = bottom[0]->shape(softmax_axis_);
   int dim = bottom[0]->count() / outer_num_;
   caffe_copy(bottom[0]->count(), bottom_data, top_data);
+
   // We need to subtract the max to avoid numerical issues, compute the exp,
   // and then normalize.
   for (int i = 0; i < outer_num_; ++i) {
@@ -48,8 +49,6 @@ void SoftmaxLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
         scale_data[k] = std::max(scale_data[k], bottom_data[i * dim + j * inner_num_ + k]);
       }
     }
-
-    std::cout<<"hello softmax\n";
 
     // subtraction
     caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, channels, inner_num_,
