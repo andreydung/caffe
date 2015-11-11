@@ -23,20 +23,21 @@ void ContrastiveLossLayer<Dtype>::LayerSetUp( const vector<Blob<Dtype>*>& bottom
 	dist_sq_.Reshape(bottom[0]->num(), 1, bottom[0]->height(), bottom[1]->width());
 
 	// vector of ones used to sum along channels
-	summer_vec_.Reshape(1, 1, bottom[0]->height(), bottom[0]->width());
-	for (int i = 0; i < bottom[0]->height() * bottom[0]->width(); ++i) {
+	summer_vec_.Reshape(1, 1, 1, bottom[0]->channels());
+	for (int i = 0; i < bottom[0]->channels(); ++i) {
 		summer_vec_.mutable_cpu_data()[i] = Dtype(1);
 	}
-	top[0]->Reshape(1,1,1,1);
 }
 
 template <typename Dtype>
-void ContrastiveLossLayer<Dtype>::Forward_cpu(
-    const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
+void ContrastiveLossLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
 
-  int count = bottom[0]->count();
+  const int num = bottom[0]->num();
+  const int count = bottom[0]->count();
   const int channels = bottom[0]->channels();
   const int dim = bottom[0]->height() * bottom[0]->width();
+
+//  top[0]->Reshape(num, 1, bottom[0]->height(), bottom[0]->width());
 
   Dtype margin = this->layer_param_.contrastive_loss_param().margin();
   bool legacy_version = this->layer_param_.contrastive_loss_param().legacy_version();
@@ -46,12 +47,21 @@ void ContrastiveLossLayer<Dtype>::Forward_cpu(
       bottom[0]->cpu_data(),  // a
       bottom[1]->cpu_data(),  // b
       diff_.mutable_cpu_data());  // a_i-b_i
+
   caffe_powx(count, diff_.cpu_data(), Dtype(2), diff_sq_.mutable_cpu_data());
-  caffe_cpu_gemv<Dtype>(CblasTrans, channels, dim, 1.,
-		  diff_sq_.cpu_data(), summer_vec_.cpu_data(), 0., dist_sq_.mutable_cpu_data());
+
+  for (int i = 0; i < num; i++) {
+	  caffe_cpu_gemv<Dtype>(CblasTrans, channels, dim, 1.,
+		  diff_sq_.cpu_data() + i*channels*dim, summer_vec_.cpu_data(), 0., dist_sq_.mutable_cpu_data() + i*dim);
+  }
+
+//  for (int i = 0; i < num; i++) {
+//	  caffe_cpu_gemv<Dtype>(CblasTrans, channels, dim, 1.,
+//		  diff_sq_.cpu_data() + i*channels*dim, summer_vec_.cpu_data(), 0., top[0]->mutable_cpu_data() + i*dim);
+//  }
 
   Dtype loss(0.0);
-  for (int i = 0; i < bottom[0]->num()*dim; ++i) {
+  for (int i = 0; i < num*dim; i++) {
 	  if (static_cast<int>(bottom[2]->cpu_data()[i])) {  // similar pairs
 		  loss += dist_sq_.cpu_data()[i];
 	  } else {  // dissimilar pairs
@@ -64,7 +74,7 @@ void ContrastiveLossLayer<Dtype>::Forward_cpu(
 	  }
   }
 
-  loss = loss / bottom[0]->num()/Dtype(dim) / Dtype(2);
+  loss = loss / Dtype(dim) / Dtype(2);
   top[0]->mutable_cpu_data()[0] = loss;
 }
 

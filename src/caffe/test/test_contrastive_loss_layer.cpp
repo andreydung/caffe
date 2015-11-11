@@ -22,9 +22,9 @@ class ContrastiveLossLayerTest : public MultiDeviceTest<TypeParam> {
 
  protected:
   ContrastiveLossLayerTest()
-      : blob_bottom_data_i_(new Blob<Dtype>(2, 3, 4, 5)),
-        blob_bottom_data_j_(new Blob<Dtype>(2, 3, 4, 5)),
-        blob_bottom_y_(new Blob<Dtype>(2, 1, 4, 5)),
+      : blob_bottom_data_i_(new Blob<Dtype>(7, 3, 4, 5)),
+        blob_bottom_data_j_(new Blob<Dtype>(7, 3, 4, 5)),
+        blob_bottom_y_(new Blob<Dtype>(7, 1, 4, 5)),
         blob_top_loss_(new Blob<Dtype>()) {
     // fill the values
     FillerParameter filler_param;
@@ -70,10 +70,6 @@ TYPED_TEST(ContrastiveLossLayerTest, TestForward) {
   const int num = this->blob_bottom_data_i_->num();
   const int channels = this->blob_bottom_data_i_->channels();
   const int dim = this->blob_bottom_data_i_->height() * this->blob_bottom_data_i_->width();
-  std::cout << "dim in testing: " << dim << "\n";
-  std::cout << "channels: " << channels << "\n";
-  std::cout << "num: " << num << "\n";
-  std::cout << "margin: " << margin << "\n";
 
   Dtype loss(0);
   for (int i = 0; i < num; ++i) {
@@ -133,6 +129,7 @@ TYPED_TEST(ContrastiveLossLayerTest, TestForwardLegacy) {
 		for (int k = 0; k < channels; ++k) {
 		  Dtype diff = this->blob_bottom_data_i_->cpu_data()[i*channels*dim+k*dim + j] -
 				  	   this->blob_bottom_data_j_->cpu_data()[i*channels*dim+k*dim + j];
+
 		  dist_sq += diff*diff;
 		}
 		if (this->blob_bottom_y_->cpu_data()[i*dim + j]) {  // similar pairs
@@ -142,7 +139,7 @@ TYPED_TEST(ContrastiveLossLayerTest, TestForwardLegacy) {
 		}
   	  }
   }
-  loss /= static_cast<Dtype>(num * dim) * Dtype(2);
+  loss /= static_cast<Dtype>(dim) * Dtype(2);
   EXPECT_NEAR(this->blob_top_loss_->cpu_data()[0], loss, 1e-6);
 }
 
