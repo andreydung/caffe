@@ -27,11 +27,28 @@ void ContrastiveLossLayer<Dtype>::LayerSetUp( const vector<Blob<Dtype>*>& bottom
 	for (int i = 0; i < bottom[0]->channels(); ++i) {
 		summer_vec_.mutable_cpu_data()[i] = Dtype(1);
 	}
+	vector<int> loss_shape(0);
+	top[0]->Reshape(loss_shape);
+
+}
+
+template <typename Dtype>
+void ContrastiveLossLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
+	diff_.Reshape(bottom[0]->num(), bottom[0]->channels(), bottom[0]->height(), bottom[0]->width());
+	diff_sq_.Reshape(bottom[0]->num(), bottom[0]->channels(), bottom[0]->height(), bottom[0]->width());
+	dist_sq_.Reshape(bottom[0]->num(), 1, bottom[0]->height(), bottom[1]->width());
+
+	// vector of ones used to sum along channels
+	summer_vec_.Reshape(1, 1, 1, bottom[0]->channels());
+	for (int i = 0; i < bottom[0]->channels(); ++i) {
+		summer_vec_.mutable_cpu_data()[i] = Dtype(1);
+	}
+	vector<int> loss_shape(0);
+	top[0]->Reshape(loss_shape);
 }
 
 template <typename Dtype>
 void ContrastiveLossLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
-
   const int num = bottom[0]->num();
   const int count = bottom[0]->count();
   const int channels = bottom[0]->channels();
@@ -132,6 +149,7 @@ void ContrastiveLossLayer<Dtype>::Backward_cpu(	const vector<Blob<Dtype>*>& top,
 				for(int c = 0; c < channels; c++) {
 					bout[j*channels*dim + c*dim + k] = diff_.cpu_data()[j*channels*dim + c*dim + k] * beta;
 				}
+
 			  } else {
 				for(int c = 0; c < channels; c++) {
 					bout[j*channels*dim + c*dim + k] = 0;
