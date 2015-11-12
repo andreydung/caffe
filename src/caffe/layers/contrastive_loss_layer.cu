@@ -9,46 +9,55 @@
 namespace caffe {
 
 template <typename Dtype>
-void ContrastiveLossLayer<Dtype>::Forward_gpu(
-    const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
+void ContrastiveLossLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
+  
   const int count = bottom[0]->count();
+  const int num = bottom[0]->num();
+  const int channels = bottom[0]->channels();
+  const int dim = bottom[0]->height() * bottom[0]->width();
+
+  Dtype margin = this->layer_param_.contrastive_loss_param().margin();
+  bool legacy_version = this->layer_param_.contrastive_loss_param().legacy_version();
+  
   caffe_gpu_sub(
       count,
       bottom[0]->gpu_data(),  // a
       bottom[1]->gpu_data(),  // b
       diff_.mutable_gpu_data());  // a_i-b_i
+  
   caffe_gpu_powx(
       count,
       diff_.mutable_gpu_data(),  // a_i-b_i
       Dtype(2),
       diff_sq_.mutable_gpu_data());  // (a_i-b_i)^2
-  caffe_gpu_gemv(
-      CblasNoTrans,
-      bottom[0]->num(),
-      bottom[0]->channels(),
-      Dtype(1.0),
-      diff_sq_.gpu_data(),  // (a_i-b_i)^2
-      summer_vec_.gpu_data(),
-      Dtype(0.0),
-      dist_sq_.mutable_gpu_data());  // \Sum (a_i-b_i)^2
-  Dtype margin = this->layer_param_.contrastive_loss_param().margin();
-  bool legacy_version =
-      this->layer_param_.contrastive_loss_param().legacy_version();
+  
+  for (int i = 0; i < num; i++) {
+    caffe_gpu_gemv(
+        CblasTrans,
+        channels,
+        dim,
+        Dtype(1.0),
+        diff_sq_.gpu_data() + i*channels*dim,  // (a_i-b_i)^2
+        summer_vec_.gpu_data(),
+        Dtype(0.0),
+        dist_sq_.mutable_gpu_data() + i*dim);  // \Sum (a_i-b_i)^2
+  }
+  
   Dtype loss(0.0);
-  for (int i = 0; i < bottom[0]->num(); ++i) {
+  for (int i = 0; i < num*dim; ++i) {
     if (static_cast<int>(bottom[2]->cpu_data()[i])) {  // similar pairs
       loss += dist_sq_.cpu_data()[i];
     } else {  // dissimilar pairs
       if (legacy_version) {
         loss += std::max(margin - dist_sq_.cpu_data()[i], Dtype(0.0));
       } else {
-        Dtype dist = std::max(margin - sqrt(dist_sq_.cpu_data()[i]),
-                              Dtype(0.0));
+        Dtype dist = std::max(margin - sqrt(dist_sq_.cpu_data()[i]), Dtype(0.0));
         loss += dist*dist;
       }
     }
   }
-  loss = loss / static_cast<Dtype>(bottom[0]->num()) / Dtype(2);
+
+  loss = loss / static_cast<Dtype>(num * dim * 2);
   top[0]->mutable_cpu_data()[0] = loss;
 }
 
@@ -83,17 +92,21 @@ __global__ void CLLBackward(const int count, const int channels,
 
 template <typename Dtype>
 void ContrastiveLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
-    const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
+        const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
+  
   for (int i = 0; i < 2; ++i) {
     if (propagate_down[i]) {
+      const int num = bottom[0]->num();
+      const int dim = bottom[0]->height() * bottom[0]->width();
       const int count = bottom[0]->count();
       const int channels = bottom[0]->channels();
+      
       Dtype margin = this->layer_param_.contrastive_loss_param().margin();
-      const bool legacy_version =
-          this->layer_param_.contrastive_loss_param().legacy_version();
+      const bool legacy_version = this->layer_param_.contrastive_loss_param().legacy_version();
       const Dtype sign = (i == 0) ? 1 : -1;
       const Dtype alpha = sign * top[0]->cpu_diff()[0] /
-          static_cast<Dtype>(bottom[0]->num());
+          static_cast<Dtype>(num*dim);
+
       // NOLINT_NEXT_LINE(whitespace/operators)
       CLLBackward<Dtype><<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS>>>(
           count, channels, margin, legacy_version, alpha,
@@ -101,6 +114,7 @@ void ContrastiveLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
           diff_.gpu_data(),  // the cached eltwise difference between a and b
           dist_sq_.gpu_data(),  // the cached square distance between a and b
           bottom[i]->mutable_gpu_diff());
+      
       CUDA_POST_KERNEL_CHECK;
     }
   }
