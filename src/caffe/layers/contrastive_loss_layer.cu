@@ -66,25 +66,27 @@ __global__ void CLLBackward(const int count, const int channels, const int dim,
     const Dtype margin, const bool legacy_version, const Dtype alpha,
     const Dtype* y, const Dtype* diff, const Dtype* dist_sq,
     Dtype *bottom_diff) {
- CUDA_KERNEL_LOOP(i, count) {
+  CUDA_KERNEL_LOOP(i, count) {
   
-  int n = i/(channels * dim);
-  int c = (i - n*(channels*dim))/dim;
-  int k =  i - n*channels*dim - c*dim;
+    int n = i/(channels * dim);
+    int c = (i - n*(channels*dim))/dim;
+    int k =  i - n*channels*dim - c*dim;
 
-  if (static_cast<int>(y[n*dim + k])) {  // similar pairs
-      bottom_diff[i] = alpha * diff[i];
+    if (static_cast<int>(y[n*dim + k])) {  // similar pairs
+        bottom_diff[i] = alpha * diff[i];
     } else {  // dissimilar pairs
       Dtype mdist(0.0);
       Dtype beta(0.0);
+
       if (legacy_version) {
         mdist = (margin - dist_sq[n*dim + k]);
-        beta = -alpha;
+        beta = -alpha * diff[i];
       } else {
         Dtype dist = sqrt(dist_sq[n*dim + k]);
         mdist = (margin - dist);
         beta = -alpha * mdist / (dist + Dtype(1e-4)) * diff[i];
       }
+
       if (mdist > 0.0) {
         bottom_diff[i] = beta;
       } else {
@@ -98,16 +100,16 @@ template <typename Dtype>
 void ContrastiveLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
         const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
       
- const int num = bottom[0]->num();
- const int dim = bottom[0]->height() * bottom[0]->width();
- const int count = bottom[0]->count();
- const int channels = bottom[0]->channels();
-  
+  const int num = bottom[0]->num();
+  const int dim = bottom[0]->height() * bottom[0]->width();
+  const int count = bottom[0]->count();
+  const int channels = bottom[0]->channels();
+  const bool legacy_version = this->layer_param_.contrastive_loss_param().legacy_version();  
+  Dtype margin = this->layer_param_.contrastive_loss_param().margin();  
+
   for (int i = 0; i < 2; ++i) {
     if (propagate_down[i]) {
-     
-      Dtype margin = this->layer_param_.contrastive_loss_param().margin();
-      const bool legacy_version = this->layer_param_.contrastive_loss_param().legacy_version();
+
       const Dtype sign = (i == 0) ? 1 : -1;
       const Dtype alpha = sign * top[0]->cpu_diff()[0]/static_cast<Dtype>(num*dim);
 
