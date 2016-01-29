@@ -55,6 +55,7 @@ void ContrastiveLossLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom
   const int dim = bottom[0]->height() * bottom[0]->width();
 
   Dtype margin = this->layer_param_.contrastive_loss_param().margin();
+  Dtype alpha_dissimilar = this->layer_param_.contrastive_loss_param().alpha_dissimilar();
   bool legacy_version = this->layer_param_.contrastive_loss_param().legacy_version();
 
   caffe_sub(
@@ -76,10 +77,10 @@ void ContrastiveLossLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom
 		  loss += dist_sq_.cpu_data()[i];
 	  } else {  // dissimilar pairs
 		  if (legacy_version) {
-			  loss += std::max(margin - dist_sq_.cpu_data()[i], Dtype(0.0));
+			  loss += alpha_dissimilar * std::max(margin - dist_sq_.cpu_data()[i], Dtype(0.0));
 		  } else {
 			  Dtype dist = std::max(margin - sqrt(dist_sq_.cpu_data()[i]), 0.0);
-			  loss += dist*dist;
+			  loss += alpha_dissimilar * dist*dist;
 		  }
 	  }
   }
@@ -94,6 +95,7 @@ void ContrastiveLossLayer<Dtype>::Backward_cpu(	const vector<Blob<Dtype>*>& top,
 												const vector<Blob<Dtype>*>& bottom) {
 
   Dtype margin = this->layer_param_.contrastive_loss_param().margin();
+  Dtype alpha_dissimilar = this->layer_param_.contrastive_loss_param().alpha_dissimilar();
   bool legacy_version = this->layer_param_.contrastive_loss_param().legacy_version();
 
   const int num = bottom[0]->num();
@@ -138,16 +140,8 @@ void ContrastiveLossLayer<Dtype>::Backward_cpu(	const vector<Blob<Dtype>*>& top,
 			  }
 
 			  if (mdist > Dtype(0.0)) {
-//				caffe_cpu_axpby_strided(
-//						channels,
-//						beta,
-//						diff_.cpu_data() + (j*channels*dim + k),
-//						Dtype(0.0),
-//						bout + (j*channels*dim + k),
-//						dim);
-
 				for(int c = 0; c < channels; c++) {
-					bout[j*channels*dim + c*dim + k] = diff_.cpu_data()[j*channels*dim + c*dim + k] * beta;
+					bout[j*channels*dim + c*dim + k] = diff_.cpu_data()[j*channels*dim + c*dim + k] * beta / alpha_dissimilar;
 				}
 
 			  } else {

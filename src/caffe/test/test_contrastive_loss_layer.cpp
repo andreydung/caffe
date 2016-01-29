@@ -67,9 +67,12 @@ TYPED_TEST(ContrastiveLossLayerTest, TestForward) {
   layer.Forward(this->blob_bottom_vec_, this->blob_top_vec_);
   // manually compute to compare
   const Dtype margin = layer_param.contrastive_loss_param().margin();
+  const Dtype alpha_dissimilar = layer_param.contrastive_loss_param().alpha_dissimilar();
   const int num = this->blob_bottom_data_i_->num();
   const int channels = this->blob_bottom_data_i_->channels();
   const int dim = this->blob_bottom_data_i_->height() * this->blob_bottom_data_i_->width();
+
+  std::cout << "Alpha dissimilar is: " << alpha_dissimilar << "\n";
 
   Dtype loss(0);
   for (int i = 0; i < num; ++i) {
@@ -85,10 +88,10 @@ TYPED_TEST(ContrastiveLossLayerTest, TestForward) {
 		}
 
 		if (this->blob_bottom_y_->cpu_data()[i * dim + j]) {  // similar pairs
-		  loss += dist_sq;
+		  loss += dist_sq ;
 		} else {
 		  Dtype dist = std::max(margin - sqrt(dist_sq), 0.0);
-		  loss += dist*dist;
+		  loss += alpha_dissimilar * dist*dist;
 		}
 	  }
   }
@@ -116,11 +119,15 @@ TYPED_TEST(ContrastiveLossLayerTest, TestForwardLegacy) {
   ContrastiveLossLayer<Dtype> layer(layer_param);
   layer.SetUp(this->blob_bottom_vec_, this->blob_top_vec_);
   layer.Forward(this->blob_bottom_vec_, this->blob_top_vec_);
+
   // manually compute to compare
   const Dtype margin = layer_param.contrastive_loss_param().margin();
+  const Dtype alpha_dissimilar = layer_param.contrastive_loss_param().alpha_dissimilar();
   const int num = this->blob_bottom_data_i_->num();
   const int channels = this->blob_bottom_data_i_->channels();
   const int dim = this->blob_bottom_data_i_->height()*this->blob_bottom_data_i_->width();
+
+  std::cout << "Alpha dissimilar is: " << alpha_dissimilar << "\n";
 
   Dtype loss(0);
   for (int i = 0; i < num; ++i) {
@@ -135,7 +142,7 @@ TYPED_TEST(ContrastiveLossLayerTest, TestForwardLegacy) {
 		if (this->blob_bottom_y_->cpu_data()[i*dim + j]) {  // similar pairs
 		  loss += dist_sq;
 		} else {
-		  loss += std::max(margin - dist_sq, Dtype(0.0));
+		  loss += alpha_dissimilar * std::max(margin - dist_sq, Dtype(0.0));
 		}
   	  }
   }

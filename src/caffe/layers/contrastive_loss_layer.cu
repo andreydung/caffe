@@ -17,6 +17,7 @@ void ContrastiveLossLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom
   const int dim = bottom[0]->height() * bottom[0]->width();
 
   Dtype margin = this->layer_param_.contrastive_loss_param().margin();
+  Dtype alpha_dissimilar = this->layer_param_.contrastive_loss_param().alpha_dissimilar();
   bool legacy_version = this->layer_param_.contrastive_loss_param().legacy_version();
   
   caffe_gpu_sub(
@@ -49,10 +50,10 @@ void ContrastiveLossLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom
       loss += dist_sq_.cpu_data()[i];
     } else {  // dissimilar pairs
       if (legacy_version) {
-        loss += std::max(margin - dist_sq_.cpu_data()[i], Dtype(0.0));
+        loss += alpha_dissimilar * std::max(margin - dist_sq_.cpu_data()[i], Dtype(0.0));
       } else {
         Dtype dist = std::max(margin - sqrt(dist_sq_.cpu_data()[i]), Dtype(0.0));
-        loss += dist*dist;
+        loss += alpha_dissimilar * dist*dist;
       }
     }
   }
@@ -63,7 +64,7 @@ void ContrastiveLossLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom
 
 template <typename Dtype>
 __global__ void CLLBackward(const int count, const int channels, const int dim,
-    const Dtype margin, const bool legacy_version, const Dtype alpha,
+    const Dtype margin, const bool legacy_version, const Dtype alpha, const Dtype alpha_dissimilar,
     const Dtype* y, const Dtype* diff, const Dtype* dist_sq,
     Dtype *bottom_diff) {
   CUDA_KERNEL_LOOP(i, count) {
@@ -88,7 +89,7 @@ __global__ void CLLBackward(const int count, const int channels, const int dim,
       }
 
       if (mdist > 0.0) {
-        bottom_diff[i] = beta;
+        bottom_diff[i] = beta/alpha_dissimilar;
       } else {
         bottom_diff[i] = 0;
       }
@@ -106,6 +107,7 @@ void ContrastiveLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
   const int channels = bottom[0]->channels();
   const bool legacy_version = this->layer_param_.contrastive_loss_param().legacy_version();  
   Dtype margin = this->layer_param_.contrastive_loss_param().margin();  
+  Dtype alpha_dissimilar = this->layer_param_.contrastive_loss_param().alpha_dissimilar();
 
   for (int i = 0; i < 2; ++i) {
     if (propagate_down[i]) {
@@ -115,7 +117,7 @@ void ContrastiveLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
 
       // NOLINT_NEXT_LINE(whitespace/operators)
       CLLBackward<Dtype><<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS>>>(
-          count, channels, dim, margin, legacy_version, alpha,
+          count, channels, dim, margin, legacy_version, alpha, alpha_dissimilar,
           bottom[2]->gpu_data(),  // pair similarity 0 or 1
           diff_.gpu_data(),  // the cached eltwise difference between a and b
           dist_sq_.gpu_data(),  // the cached square distance between a and b
